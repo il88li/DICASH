@@ -3,21 +3,31 @@ from flask import Flask, request
 import telebot
 import google.generativeai as genai
 
-# الإعدادات (تأكد من صحتها)
+# --- الإعدادات (تأكد من كتابة التوكن والـ API بشكل صحيح) ---
 TOKEN = "8531055332:AAGAT8Q7UMlyAHjOif1IJwyrZGcEZYLhmW4"
 GEMINI_KEY = "AIzaSyABlAHgp2wpiH3OKzOHq2QKiI2xjIQaPAE"
 CHANNEL_ID = "2904278551"
+# الرابط الأساسي بتاعك على ريندر
+WEBHOOK_URL = f"https://dicash.onrender.com/webhook"
 
+# تعريف البوت وتطبيق فلاسك
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# إعداد Gemini
+# إعداد ذكاء Gemini الاصطناعي
 genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-PROMPT = "تقمص شخصية شاب مصري بائس وشيك. اكتب عبارة سوداء ساخرة (25-30 حرف) بقافية شعبية مصرية. أريد العبارة فقط."
+# "البرومبت" اللي بيخلي البوت يلبس الشخصية البائسة الشيك
+PROMPT = (
+    "تقمص شخصية شاب مصري (16-21 سنة)، شيك جداً وسط ركام حرب. "
+    "اكتب عبارة سوداء ساخرة (30 حرف كحد أقصى) بقافية شعبية مصرية دارجة. "
+    "ابعد عن الكلمات الرسمية. عبر عن الوسواس ونشافان القلب والأناقة وسط الخراب. "
+    "أريد العبارة فقط بدون مقدمات."
+)
 
-# المسار الثابت للويب هوك
+# --- مسارات الويب هوك (WebHook Routes) ---
+
 @app.route('/webhook', methods=['POST'])
 def getMessage():
     if request.headers.get('content-type') == 'application/json':
@@ -25,28 +35,47 @@ def getMessage():
         update = telebot.types.Update.de_json(json_string)
         bot.process_new_updates([update])
         return "!", 200
-    return "Forbidden", 403
+    else:
+        return "Forbidden", 403
 
 @app.route('/')
 def index():
-    return "البوت شغال يا برنس ومستني الويب هوك!", 200
+    # دي عشان لما تفتح الرابط في المتصفح تتأكد إن السيرفر صاحي
+    return "<h1>البوت شغال والوجع مستمر..</h1>", 200
+
+# --- معالجة رسائل تلجرام ---
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.reply_to(message, "أهلاً يا برنس.. جاهز للنكد الشيك؟ ابعت أي حاجة وهرد عليك بقافية.")
+    markup = telebot.types.InlineKeyboardMarkup()
+    btn = telebot.types.InlineKeyboardButton("نشر نكد شيك في القناة 🖋️", callback_data="publish")
+    markup.add(btn)
+    bot.reply_to(message, "أهلاً يا برنس.. ده بوت الوجع الشيك. دوس عشان تنشر في القناة.", reply_markup=markup)
 
-@bot.message_handler(func=lambda message: True)
-def handle_all(message):
+@bot.callback_query_handler(func=lambda call: call.data == "publish")
+def publish_to_channel(call):
     try:
+        # توليد المحتوى بالذكاء الاصطناعي
         response = model.generate_content(PROMPT)
-        bot.reply_to(message, response.text.strip())
-    except:
-        bot.reply_to(message, "الوسواس زاد والرد تاه..")
+        sad_quote = response.text.strip()
+        
+        # النشر في القناة
+        bot.send_message(CHANNEL_ID, sad_quote)
+        
+        # الرد على المستخدم في الخاص
+        bot.answer_callback_query(call.id, "تم النشر بنجاح.")
+        bot.send_message(call.message.chat.id, f"العبارة اللي اتنشرت:\n\n**{sad_quote}**")
+    except Exception as e:
+        print(f"Error: {e}")
+        bot.answer_callback_query(call.id, "حصل مشكلة في التوليد.")
+
+# --- تفعيل الويب هوك وتشغيل التطبيق ---
+
+# ملاحظة: شيلنا الـ set_webhook من جوه الـ main عشان Gunicorn يشغلها فوراً
+bot.remove_webhook()
+bot.set_webhook(url=WEBHOOK_URL)
 
 if __name__ == "__main__":
-    # تفعيل الويب هوك أوتوماتيكياً على المسار الجديد
-    bot.remove_webhook()
-    bot.set_webhook(url="https://dicash.onrender.com/webhook")
-    
+    # تشغيل السيرفر (في حالة التشغيل المحلي أو الاختبار)
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
