@@ -5,7 +5,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import google.generativeai as genai
 
 # --- الإعدادات ---
-TOKEN = "8531055332:AAGAT8Q7UMlyAHjOif1IJwyrZGcEZYLhmW4"
+TOKEN = "8476324781:AAFljvUAT6GYoysL_mvl8rCoADMNXcH1n1g"
 GEMINI_KEY = "AIzaSyABlAHgp2wpiH3OKzOHq2QKiI2xjIQaPAE"
 # رابط الويب هوك الخاص بك
 WEBHOOK_URL = f"https://dicash.onrender.com/webhook"
