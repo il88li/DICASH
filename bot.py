@@ -1,33 +1,25 @@
 import os
 from flask import Flask, request
 import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import google.generativeai as genai
 
-# --- الإعدادات (تأكد من كتابة التوكن والـ API بشكل صحيح) ---
+# --- الإعدادات ---
 TOKEN = "8531055332:AAGAT8Q7UMlyAHjOif1IJwyrZGcEZYLhmW4"
 GEMINI_KEY = "AIzaSyABlAHgp2wpiH3OKzOHq2QKiI2xjIQaPAE"
-CHANNEL_ID = "2904278551"
-# الرابط الأساسي بتاعك على ريندر
+# رابط الويب هوك الخاص بك
 WEBHOOK_URL = f"https://dicash.onrender.com/webhook"
 
-# تعريف البوت وتطبيق فلاسك
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__)
 
-# إعداد ذكاء Gemini الاصطناعي
+# إعداد Gemini
 genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# "البرومبت" اللي بيخلي البوت يلبس الشخصية البائسة الشيك
-PROMPT = (
-    "تقمص شخصية شاب مصري (16-21 سنة)، شيك جداً وسط ركام حرب. "
-    "اكتب عبارة سوداء ساخرة (30 حرف كحد أقصى) بقافية شعبية مصرية دارجة. "
-    "ابعد عن الكلمات الرسمية. عبر عن الوسواس ونشافان القلب والأناقة وسط الخراب. "
-    "أريد العبارة فقط بدون مقدمات."
-)
+PROMPT = "تقمص شخصية شاب مصري بائس وشيك. اكتب عبارة سوداء ساخرة (30 حرف) بقافية شعبية مصرية دارجة. أريد العبارة فقط."
 
-# --- مسارات الويب هوك (WebHook Routes) ---
-
+# --- معالجة الويب هوك ---
 @app.route('/webhook', methods=['POST'])
 def getMessage():
     if request.headers.get('content-type') == 'application/json':
@@ -35,47 +27,51 @@ def getMessage():
         update = telebot.types.Update.de_json(json_string)
         bot.process_new_updates([update])
         return "!", 200
-    else:
-        return "Forbidden", 403
+    return "Forbidden", 403
 
 @app.route('/')
 def index():
-    # دي عشان لما تفتح الرابط في المتصفح تتأكد إن السيرفر صاحي
-    return "<h1>البوت شغال والوجع مستمر..</h1>", 200
+    return "Bot is running...", 200
 
-# --- معالجة رسائل تلجرام ---
+# --- الأزرار والقوائم ---
+def main_menu():
+    markup = InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        InlineKeyboardButton("📢 تعيين القناة", callback_data="set_channel"),
+        InlineKeyboardButton("⏰ تعيين وقت النشر", callback_data="set_time"),
+        InlineKeyboardButton("🖋️ توليد عبارة الآن", callback_data="generate_now")
+    )
+    return markup
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    markup = telebot.types.InlineKeyboardMarkup()
-    btn = telebot.types.InlineKeyboardButton("نشر نكد شيك في القناة 🖋️", callback_data="publish")
-    markup.add(btn)
-    bot.reply_to(message, "أهلاً يا برنس.. ده بوت الوجع الشيك. دوس عشان تنشر في القناة.", reply_markup=markup)
+    bot.send_message(
+        message.chat.id, 
+        "أهلاً بك في لوحة تحكم بوت النكد الشيك.\nاختر ما تريد القيام به:", 
+        reply_markup=main_menu()
+    )
 
-@bot.callback_query_handler(func=lambda call: call.data == "publish")
-def publish_to_channel(call):
-    try:
-        # توليد المحتوى بالذكاء الاصطناعي
-        response = model.generate_content(PROMPT)
-        sad_quote = response.text.strip()
+# --- معالجة الضغط على الأزرار ---
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data == "generate_now":
+        try:
+            response = model.generate_content(PROMPT)
+            quote = response.text.strip()
+            bot.edit_message_text(f"العبارة المولدة:\n\n`{quote}`", call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=main_menu())
+        except:
+            bot.answer_callback_query(call.id, "فشل التوليد، حاول مجدداً.")
+            
+    elif call.data == "set_channel":
+        bot.send_message(call.message.chat.id, "أرسل معرف القناة الآن (مثال: @mychannel أو ID القناة).")
         
-        # النشر في القناة
-        bot.send_message(CHANNEL_ID, sad_quote)
-        
-        # الرد على المستخدم في الخاص
-        bot.answer_callback_query(call.id, "تم النشر بنجاح.")
-        bot.send_message(call.message.chat.id, f"العبارة اللي اتنشرت:\n\n**{sad_quote}**")
-    except Exception as e:
-        print(f"Error: {e}")
-        bot.answer_callback_query(call.id, "حصل مشكلة في التوليد.")
+    elif call.data == "set_time":
+        bot.send_message(call.message.chat.id, "أرسل وقت النشر المطلوب (مثال: 12:00 PM).")
 
-# --- تفعيل الويب هوك وتشغيل التطبيق ---
-
-# ملاحظة: شيلنا الـ set_webhook من جوه الـ main عشان Gunicorn يشغلها فوراً
+# --- تشغيل وتفعيل الويب هوك ---
 bot.remove_webhook()
 bot.set_webhook(url=WEBHOOK_URL)
 
 if __name__ == "__main__":
-    # تشغيل السيرفر (في حالة التشغيل المحلي أو الاختبار)
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
