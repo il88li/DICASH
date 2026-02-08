@@ -1,13 +1,13 @@
 services:
   - type: web
-    name: telegram-scheduler-bot
+    name: dicash-bot
     runtime: python
     plan: free
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python bot.py"
     envVars:
       - key: BOT_TOKEN
-        sync: false  # ستضيفه يدوياً في لوحة التحكم
+        sync: false
       - key: ADMIN_ID
         sync: false
       - key: PYTHON_VERSION
